@@ -1,4 +1,5 @@
 import datetime
+from numpy import polyfit
 
 
 def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: str) -> float:
@@ -114,9 +115,9 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
             dayList = list(dts.keys())
             dayList.sort()
             totalProcess = sum([hp[dts[ty]] for ty in dts])
-            startTime = datetime.datetime(year=startDate.year, month=startDate.month, day=startDate.day, hour=6)
+            startTime = datetime.datetime(year=startDate.year, month=startDate.month, day=startDate.day, hour=7)
             process = 0
-            h = datetime.timedelta.total_seconds(t - startTime) // 3600
+            h = datetime.timedelta.total_seconds(t - startTime) // 3600 - 1
             i = 0
             while h >= durationHourDict[dts[dayList[i]][0]]:
                 h -= durationHourDict[dts[dayList[i]][0]]
@@ -128,11 +129,18 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
             t0 = datetime.datetime(year=t.year, month=t.month, day=t.day, hour=t.hour)
             t1 = t0 + datetime.timedelta(hours=1)
             k = t.minute / 60
-            return t_to_process(t0) * (1 - k) + t_to_process(t1) * k
+            if t1 != datetime.datetime(year=endDate.year, month=endDate.month, day=endDate.day, hour=12):
+                return t_to_process(t0) * (1 - k) + t_to_process(t1) * k
+            else:
+                return t_to_process(t0) * (1 - k) + k
 
-    prediction = []
-    for t in data:
+    dataList, processList = [0], [0]
+    tl = list(data.keys())
+    tl.sort()
+    for t in tl:
         p = data[t] / t_to_process(t)
-        prediction.append(p)
-    return sum(prediction) / len(prediction)
-
+        dataList.append(data[t])
+        processList.append(t_to_process(t))
+        print("{}(BJS): {} → 预测 = {:.0f}".format(t + datetime.timedelta(hours=8), data[t], p))
+    k = polyfit(processList, dataList, 1)
+    print("参考预测值：{}".format(list(k)[0]))
