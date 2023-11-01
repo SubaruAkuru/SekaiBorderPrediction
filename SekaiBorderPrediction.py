@@ -143,4 +143,4 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
         processList.append(t_to_process(t))
         print("{}(BJS): {} → 预测 = {:.0f}".format(t + datetime.timedelta(hours=8), data[t], p))
     k = polyfit(processList, dataList, 1)
-    print("参考预测值：{}".format(list(k)[0]))
+    return list(k)[0]
