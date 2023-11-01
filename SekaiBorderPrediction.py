@@ -2,20 +2,22 @@ import datetime
 from numpy import polyfit
 
 
-def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: str) -> float:
-    """
-    :param startDate: The date that event starts.
-    :param endDate: The date that event ends.
-    :param data: Border during the event, key(s) should be datetime.datetime *in GMT* and value(s) should be int.
-    :param line: the border you want to predict. It can be '100', '200', '300', '400', '500', '1000', '2000', '3000',
-    '4000', '5000', '10000', '20000', '30000', '40000', '50000', '100000'.
-    :return: The border prediction value in float.
-    """
-    def dataRead(filename: str):
-        with open(filename, 'r') as f:
-            return eval(f.read())
+def dataRead(filename: str):
+    with open(filename, 'r') as f:
+        return eval(f.read())
 
-    def dayTypes():
+
+class Predictor:
+    def __init__(self, startDate: datetime.date, endDate: datetime.date):
+        """
+        :param startDate: The date that event starts.
+        :param endDate: The date that event ends.
+        """
+        self.startDate = startDate
+        self.endDate = endDate
+        self.dayDict = self._dayTypes()
+
+    def _dayTypes(self):
         def yesterday(d):
             return datetime.date.fromordinal(datetime.date.toordinal(d) - 1)
 
@@ -87,8 +89,8 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
             return isSummerVacation(d) or isWinterVacation(d) or isSpringVacation(d)
 
         dayDict = {}
-        ed = startDate
-        while ed != tomorrow(endDate):
+        ed = self.startDate
+        while ed != tomorrow(self.endDate):
             dayDict[ed] = ""
             ed = tomorrow(ed)
         for d in dayDict:
@@ -98,24 +100,25 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
                 dayDict[d] = "V"
             else:
                 dayDict[d] = "W"
-            if d == startDate:
+            if d == self.startDate:
                 dayDict[d] = "S" + dayDict[d]
-            elif d == endDate:
+            elif d == self.endDate:
                 dayDict[d] = "F" + dayDict[d]
             else:
                 dayDict[d] = "M" + dayDict[d]
         return dayDict
 
-    def t_to_process(t: datetime.datetime):
+    def _t_to_process(self, t: datetime.datetime, line: str):
         if t.minute == 0:
             durationHourDict = {"S": 12, "M": 24, "F": 17}
             hp = dataRead("data\\holidayParameters.txt")[line]
             shape = dataRead("data\\aveShapeOf{}.txt".format(line))
-            dts = dayTypes()
+            dts = self.dayDict
             dayList = list(dts.keys())
             dayList.sort()
             totalProcess = sum([hp[dts[ty]] for ty in dts])
-            startTime = datetime.datetime(year=startDate.year, month=startDate.month, day=startDate.day, hour=7)
+            startTime = datetime.datetime(year=self.startDate.year, month=self.startDate.month, day=self.startDate.day,
+                                          hour=7)
             process = 0
             h = datetime.timedelta.total_seconds(t - startTime) // 3600 - 1
             i = 0
@@ -129,18 +132,49 @@ def predict(startDate: datetime.date, endDate: datetime.date, data: dict, line: 
             t0 = datetime.datetime(year=t.year, month=t.month, day=t.day, hour=t.hour)
             t1 = t0 + datetime.timedelta(hours=1)
             k = t.minute / 60
-            if t1 != datetime.datetime(year=endDate.year, month=endDate.month, day=endDate.day, hour=12):
-                return t_to_process(t0) * (1 - k) + t_to_process(t1) * k
+            if t1 != datetime.datetime(year=self.endDate.year, month=self.endDate.month, day=self.endDate.day, hour=12):
+                return self._t_to_process(t0, line) * (1 - k) + self._t_to_process(t1, line) * k
             else:
-                return t_to_process(t0) * (1 - k) + k
+                return self._t_to_process(t0, line) * (1 - k) + k
 
-    dataList, processList = [0], [0]
-    tl = list(data.keys())
-    tl.sort()
-    for t in tl:
-        p = data[t] / t_to_process(t)
-        dataList.append(data[t])
-        processList.append(t_to_process(t))
-        print("{}(BJS): {} → 预测 = {:.0f}".format(t + datetime.timedelta(hours=8), data[t], p))
-    k = polyfit(processList, dataList, 1)
-    return list(k)[0]
+    def predict(self, data: dict, line: str):
+        """
+        :param data: Border during the event, key(s) should be datetime.datetime *in GMT* and value(s) should be int.
+        :param line: the border you want to predict. It can be '50', '100', '200', '300', '400', '500', '1000', '2000',
+        '3000', '4000', '5000', '10000', '20000', '30000', '40000', '50000', '100000'.
+        :return: The border prediction value in float.
+        """
+        dataList, processList = [0], [0]
+        tl = list(data.keys())
+        tl.sort()
+        for t in tl:
+            p = data[t] / self._t_to_process(t, line)
+            dataList.append(data[t])
+            processList.append(self._t_to_process(t, line))
+            # print("{}(BJS): {} → Prediction = {:.0f}".format(t + datetime.timedelta(hours=8), data[t], p))
+        k = polyfit(processList, dataList, 1)
+        return list(k)[0]
+
+    def specifiedTimePrediction(self, nowTime: datetime.datetime, data: dict, line: str) -> float:
+        """
+        :param nowTime: The Time now.
+        :param data: Border during the event, key(s) should be datetime.datetime *in GMT* and value(s) should be int.
+        :param line: the border you want to predict. It can be '50', '100', '200', '300', '400', '500', '1000', '2000',
+        '3000', '4000', '5000', '10000', '20000', '30000', '40000', '50000', '100000'.
+        :return: The instantaneous border value predicted to be.
+        """
+        process = self._t_to_process(nowTime, line)
+        if 0 <= process <= 1:
+            return self.predict(data, line) * process
+        else:
+            raise Exception("Invalid time {}!".format(nowTime))
+
+
+Predictor = Predictor(datetime.date(year=2023, month=3, day=30), datetime.date(year=2023, month=4, day=9))
+data = {datetime.datetime(year=2023, month=4, day=4, hour=13, minute=18): 38274002,
+        datetime.datetime(year=2023, month=4, day=5, hour=6, minute=54): 41786890}
+print(Predictor.predict(data, "100"))
+
+now = datetime.datetime(year=2023, month=4, day=7, hour=7, minute=7)
+print(Predictor.specifiedTimePrediction(now, data, "100"))
+
