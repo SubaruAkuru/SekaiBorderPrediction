@@ -1,4 +1,6 @@
 import datetime
+import os.path
+
 from numpy import polyfit
 
 
@@ -111,8 +113,8 @@ class Predictor:
     def _t_to_process(self, t: datetime.datetime, line: str):
         if t.minute == 0:
             durationHourDict = {"S": 12, "M": 24, "F": 17}
-            hp = dataRead("data\\holidayParameters.txt")[line]
-            shape = dataRead("data\\aveShapeOf{}.txt".format(line))
+            hp = dataRead(os.path.join("data", "holidayParameters.txt"))[line]
+            shape = dataRead(os.path.join("data", "aveShapeOf{}.txt").format(line))
             dts = self.dayDict
             dayList = list(dts.keys())
             dayList.sort()
@@ -168,13 +170,3 @@ class Predictor:
             return self.predict(data, line) * process
         else:
             raise Exception("Invalid time {}!".format(nowTime))
-
-
-Predictor = Predictor(datetime.date(year=2023, month=3, day=30), datetime.date(year=2023, month=4, day=9))
-data = {datetime.datetime(year=2023, month=4, day=4, hour=13, minute=18): 38274002,
-        datetime.datetime(year=2023, month=4, day=5, hour=6, minute=54): 41786890}
-print(Predictor.predict(data, "100"))
-
-now = datetime.datetime(year=2023, month=4, day=7, hour=7, minute=7)
-print(Predictor.specifiedTimePrediction(now, data, "100"))
-
